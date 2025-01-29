@@ -3,7 +3,7 @@ const cors = require('cors');
 const app = express();
 require('dotenv').config();
 const port = process.env.PORT || 5000;
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 
 //middleware
@@ -27,10 +27,27 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
-    const bioCollection = client.db('metro_bond').collection('bio_data'); 
+    const reviewCollection = client.db('metro_bond').collection('reviews'); 
+    const bioCollection = client.db('metro_bond').collection('bioData'); 
 
 
+    app.get('/successReview', async(req,res)=>{
+      const result = await reviewCollection.find().toArray();
+      res.send(result);
+    })
 
+    app.get('/bioData', async(req,res)=>{
+      const result = await bioCollection.find().toArray();
+      res.send(result);
+    })
+
+
+    app.get('/bioData/:id', async(req,res)=>{
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id)}
+      const result = await bioCollection.findOne(query);
+      res.send(result);
+    })
 
 
 
