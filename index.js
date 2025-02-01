@@ -36,6 +36,14 @@ async function run() {
       res.send(result);
     })
 
+    //review details 
+    app.get('/successReview/:id', async(req,res)=>{
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id)}
+      const result = await reviewCollection.findOne(query);
+      res.send(result);
+    })
+
     app.get('/bioData', async(req,res)=>{
       const result = await bioCollection.find().toArray();
       res.send(result);
