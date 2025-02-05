@@ -27,10 +27,34 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
+    const userCollection = client.db('metro_bond').collection('users'); 
     const reviewCollection = client.db('metro_bond').collection('reviews'); 
     const bioCollection = client.db('metro_bond').collection('bioData'); 
 
 
+    //user related api
+    app.post('/users', async(req,res)=>{
+      const user = req.body;
+      console.log("Received User:", user); 
+      const query = {email: user.email}
+      const existingUser = await userCollection.findOne(query);
+      
+      if(existingUser){
+        return res.send({ message: 'user already exists', insertedId: null});
+      }
+      const result = await userCollection.insertOne(user);
+      console.log("Inserted User:", result);
+      res.send(result);
+    })
+  
+    app.get('/users', async (req, res) => {
+      const users = await userCollection.find().toArray();
+      res.send(users);
+    });
+    
+    
+
+    //reviews
     app.get('/successReview', async(req,res)=>{
       const result = await reviewCollection.find().toArray();
       res.send(result);
@@ -58,6 +82,7 @@ async function run() {
     })
 
 
+   
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
