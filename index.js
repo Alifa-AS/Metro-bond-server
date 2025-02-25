@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const app = express();
 require('dotenv').config();
 const port = process.env.PORT || 5000;
@@ -32,11 +33,68 @@ async function run() {
     const bioCollection = client.db('metro_bond').collection('bioData'); 
 
 
+    //jwt related api's
+    app.post('/jwt', async(req,res) =>{
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, 
+        {expiresIn: '5h'});
+      res.send({ token });
+    })
+
+    //middlewares
+    const verifyToken = (req, res, next) =>{
+      console.log("inside verify token", req.headers.authorization);
+      if(!req.headers.authorization){
+        return res.status(401).send({ message: 'Unauthorized access' })
+      }
+      const token = req.headers.authorization.split(' ')[1];
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET,(err, decoded)=>{
+        if(err){
+          return res.status(401).send({ message: ' UnAuthorized access' })
+        }
+        req.decoded = decoded;
+        next();
+      })
+    }
+
+    //use verify admin after verify token
+    const verifyAdmin = async(req,res,next) =>{
+      const email = req.decoded.email;
+      const query = {email: email};
+      const user = await userCollection.findOne(query);
+      const isAdmin = user?.role === 'admin';
+      if(!isAdmin){
+        return res.status(403).send({ message: 'Forbidden access' })
+      }
+      next();
+    }
+
     //user related api
-    app.post('/users', async(req,res)=>{
+    app.get('/users', verifyToken, verifyAdmin, async(req,res)=>{
+      const result = await userCollection.find().toArray();
+      console.log(result);
+      res.send(result);
+    })
+
+    app.get('/users/admin/:email', verifyToken, async(req,res) =>{
+      const email = req.params.email;
+
+      if(email !== req.decoded.email){
+        return res.status(403).send({ message: 'Forbidden access' })
+      }
+      const query = {email: email};
+      const user = await userCollection.findOne(query);
+      let admin = false;
+      if(user){
+        admin = user?.role === 'admin'
+      }
+      res.send({ admin });
+    })
+
+    app.post('/users', async(req,res) => {
       const user = req.body;
       console.log("Received User:", user); 
-      const query = {email: user.email}
+      const query = {email: user.email} 
       const existingUser = await userCollection.findOne(query);
       
       if(existingUser){
@@ -47,14 +105,28 @@ async function run() {
       res.send(result);
     })
   
-    app.get('/users', async (req, res) => {
-      const users = await userCollection.find().toArray();
-      res.send(users);
-    });
-    
+    app.patch('/users/admin/:id', verifyToken, verifyAdmin, async(req,res)=>{
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: 'admin'
+        }
+      }
+      const result = await userCollection.updateOne(filter, updatedDoc)
+      res.send(result);
+    })
+
+    app.delete('/users/:id',verifyToken, verifyAdmin, async(req,res) => {
+      const id = req.params.id;
+      console.log("Deleting user with ID:", id);
+      const query = {_id: new ObjectId(id)}
+      const result = await userCollection.deleteOne(query);
+      res.send(result);
+    })
     
 
-    //reviews
+    //reviews related apis
     app.get('/successReview', async(req,res)=>{
       const result = await reviewCollection.find().toArray();
       res.send(result);
@@ -68,6 +140,8 @@ async function run() {
       res.send(result);
     })
 
+
+    //bioData related apis
     app.get('/bioData', async(req,res)=>{
       const result = await bioCollection.find().toArray();
       res.send(result);
@@ -82,8 +156,46 @@ async function run() {
     })
 
 
-   
+    // Get last biodata ID
+  app.get('/bioData/lastId', async (req, res) => {
+    try {
+        const lastBiodata = await bioCollection.find().sort({ biodataId: -1 }).limit(1).toArray();
+        const lastId = lastBiodata.length > 0 ? lastBiodata[0].biodataId : 0;
+        res.send({ lastId });
+    } catch (error) {
+        console.error("Error fetching last biodata ID:", error);
+        res.status(500).send({ message: "Server error" });
+    }
+  });
 
+// Create or Update Biodata
+app.post('/bioData', async (req, res) => {
+  try {
+      const { _id, ...biodata } = req.body;
+
+      if (_id) {
+          // Update existing biodata
+          const query = { _id: new ObjectId(_id) };
+          const updateDoc = { $set: biodata };
+          const result = await bioCollection.updateOne(query, updateDoc);
+          res.send({ message: "Biodata updated successfully", modifiedCount: result.modifiedCount });
+      } else {
+          // Get last biodata ID and create new one
+          const lastBiodata = await bioCollection.find().sort({ biodataId: -1 }).limit(1).toArray();
+          const newId = lastBiodata.length > 0 ? lastBiodata[0].biodataId + 1 : 1;
+          const newBiodata = { ...biodata, biodataId: newId };
+          
+          const result = await bioCollection.insertOne(newBiodata);
+          res.send({ message: "Biodata created successfully", insertedId: result.insertedId });
+      }
+  } catch (error) {
+      console.error("Error in creating/updating biodata:", error);
+      res.status(500).send({ message: "Server error" });
+  }
+});
+
+
+   
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
