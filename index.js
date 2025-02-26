@@ -3,6 +3,8 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const app = express();
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
+
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
@@ -31,6 +33,7 @@ async function run() {
     const userCollection = client.db('metro_bond').collection('users'); 
     const reviewCollection = client.db('metro_bond').collection('reviews'); 
     const bioCollection = client.db('metro_bond').collection('bioData'); 
+    const paymentCollection = client.db('metro_bond').collection('payments'); 
 
 
     //jwt related api's
@@ -76,12 +79,12 @@ async function run() {
       res.send(result);
     })
 
-    app.get('/users/admin/:email', verifyToken, async(req,res) =>{
+    app.get('/users/admin/:email', async(req,res) =>{
       const email = req.params.email;
 
-      if(email !== req.decoded.email){
-        return res.status(403).send({ message: 'Forbidden access' })
-      }
+      // if(email !== req.decoded.email){
+      //   return res.status(403).send({ message: 'Forbidden access' })
+      // }
       const query = {email: email};
       const user = await userCollection.findOne(query);
       let admin = false;
@@ -194,13 +197,46 @@ app.post('/bioData', async (req, res) => {
           const result = await bioCollection.insertOne(newBiodata);
           res.send({ message: "Biodata created successfully", insertedId: result.insertedId });
       }
-  } catch (error) {
-      console.error("Error in creating/updating biodata:", error);
-      res.status(500).send({ message: "Server error" });
-  }
-});
+      } catch (error) {
+          console.error("Error in creating/updating biodata:", error);
+          res.status(500).send({ message: "Server error" });
+      }
+    });
 
 
+    //payment intent
+    app.post('/create-payment-intent', async (req,res)=>{
+      const {amount} = req.body;
+     
+      // Minimum amount check (5 dollars = 500 cents)
+      if (isNaN(amount) || amount < 500) {
+        return res.status(400).send({ message: 'Invalid amount' });
+    }
+
+      try{
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: 'usd',
+          payment_method_types: ['card']
+        });
+        res.send({
+          clientSecret: paymentIntent.client_secret
+        })
+      }
+      catch (error) {
+        console.error('Error creating payment intent:', error);
+        res.status(500).send({ error: 'Error creating payment intent' });
+    }
+    })
+
+    app.post('/payments', async(req,res)=>{
+      const payment = req.body;
+      const paymentResult = await paymentCollection.insertOne(payment);
+
+      //delete each 
+      console.log('payment info', payment);
+      res.send(paymentResult)
+    })
    
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
