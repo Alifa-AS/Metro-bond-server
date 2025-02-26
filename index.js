@@ -132,6 +132,12 @@ async function run() {
       res.send(result);
     })
 
+    app.post('/successReview', async(req,res)=>{
+      const story = req.body;
+      const result = await reviewCollection.insertOne(story);
+      res.send(result);
+    })
+
     //review details 
     app.get('/successReview/:id', async(req,res)=>{
       const id = req.params.id;
