@@ -10,7 +10,15 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 
 //middleware
-app.use(cors());
+app.use(cors({
+  origin: ['https://b10-a12-metro-server.vercel.app', 
+    'https://b10a12-metro.web.app',
+    'https://b10a12-metro.firebaseapp.com',
+    'http://localhost:5173'
+  ],
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+  credentials: true
+}));
 app.use(express.json());
 
 
@@ -33,6 +41,7 @@ async function run() {
     const userCollection = client.db('metro_bond').collection('users'); 
     const reviewCollection = client.db('metro_bond').collection('reviews'); 
     const bioCollection = client.db('metro_bond').collection('bioData'); 
+    const favoriteCollection = client.db('metro_bond').collection('favorite'); 
     const paymentCollection = client.db('metro_bond').collection('payments'); 
 
 
@@ -79,7 +88,7 @@ async function run() {
       res.send(result);
     })
 
-    app.get('/users/admin/:email', async(req,res) =>{
+    app.get('/users/admin/:email', verifyToken, async(req,res) =>{
       const email = req.params.email;
 
       // if(email !== req.decoded.email){
@@ -204,6 +213,28 @@ app.post('/bioData', async (req, res) => {
     });
 
 
+    //favorite api's
+    app.post('/favorite', async (req,res)=>{
+      const person = req.body;
+      const result = await favoriteCollection.insertOne(person);
+      res.send(result);
+    })
+
+    app.get('/favorite', verifyToken, async (req, res) => {
+      const email = req.query.email;
+      const query = {email: email};
+      const  result = await favoriteCollection.find(query).toArray();
+      res.send(result);
+    })
+
+    // DELETE favorite item by ID
+    app.delete('/favorite/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await favoriteCollection.deleteOne(query);
+      res.send(result);     
+    });
+
     //payment intent
     app.post('/create-payment-intent', async (req,res)=>{
       const {amount} = req.body;
@@ -229,18 +260,32 @@ app.post('/bioData', async (req, res) => {
     }
     })
 
+    app.get('/payments/:email', verifyToken, async (req, res) => {
+      const query = {email: req.params.email}
+      if(req.params.email !== req.decoded.email){
+        return res.status(403).send({message: 'forbidden access'})
+      }
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+  });
+
     app.post('/payments', async(req,res)=>{
       const payment = req.body;
       const paymentResult = await paymentCollection.insertOne(payment);
 
       //delete each 
       console.log('payment info', payment);
-      res.send(paymentResult)
+      const query = {_id:{
+        $in: payment._id.map(id=>new ObjectId(id))
+      }};
+
+      const deleteResult = await bioCollection.deleteMany(query);
+      res.send({paymentResult, deleteResult});
     })
    
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
 
 
 } finally {
