@@ -163,10 +163,16 @@ async function run() {
     app.get('/bioData', async (req, res) => {
       console.log('Fetching bioData...');
     
+      const email = req.query.email;
+      let query ={};
+
+      if(email){
+        query.email = email
+      }
       const { minAge, maxAge, biodataType , permanentDivision } = req.query;
     
       // Filter Object
-      let query = {};
+      // let query = {};
       if (minAge && maxAge) {
         query.age = { $gte: parseInt(minAge), $lte: parseInt(maxAge) };
       }
@@ -180,12 +186,6 @@ async function run() {
     });
 
 
-    // app.post('/bioData', async(req,res)=>{
-    //   const biodata = req.body;
-    //   const result = await bioCollection.insertOne(biodata);
-    //   res.send(result);
-    // })
-
     app.get('/bioData/:id', async(req,res)=>{
       const id = req.params.id;
       const query = { _id: new ObjectId(id)}
@@ -194,25 +194,42 @@ async function run() {
     })
 
 
+    //create or update bioData
     app.post('/bioData', async (req, res) => {
       try {
           const biodata = req.body;
-          
-          // Find last inserted biodata ID
-          const lastBiodata = await bioCollection.find().sort({ biodataId: -1 }).limit(1).toArray();
-          const newId = lastBiodata.length > 0 ? lastBiodata[0].biodataId + 1 : 1;
+          const userEmail = biodata.email;
   
-          // Assign new ID
-          biodata.biodataId = newId;
+          // Check if the biodata already exists
+          const existingBiodata = await bioCollection.findOne({ email: userEmail });
   
-          // Insert into database
-          const result = await bioCollection.insertOne(biodata);
-          res.send(result);
+          if (!existingBiodata) {
+              // Find the last inserted biodata ID only if inserting a new record
+              const lastBiodata = await bioCollection.find().sort({ biodataId: -1 }).limit(1).toArray();
+              const newId = lastBiodata.length > 0 ? lastBiodata[0].biodataId + 1 : 1;
+              
+              // Assign new ID
+              biodata.biodataId = newId;
+  
+              // Insert the new biodata
+              const result = await bioCollection.insertOne(biodata);
+              return res.send({ message: 'Biodata created successfully', result });
+          }
+  
+          // If biodata exists, update it
+          const result = await bioCollection.updateOne(
+              { email: userEmail },
+              { $set: biodata }
+          );
+  
+          res.send({ message: 'Biodata updated successfully', result });
+  
       } catch (error) {
           console.error(error);
-          res.status(500).send({ message: 'Error creating biodata' });
+          res.status(500).send({ message: 'Error creating/updating biodata' });
       }
   });
+  
   
 
 
