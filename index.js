@@ -11,7 +11,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 //middleware
 app.use(cors({
-  origin: ['https://b10-a12-metro-server.vercel.app', 
+  origin: ['http://localhost:5000', 
     'https://b10a12-metro.web.app',
     'https://b10a12-metro.firebaseapp.com',
     'http://localhost:5173'
@@ -36,7 +36,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
+    await client.connect();
 
     const userCollection = client.db('metro_bond').collection('users'); 
     const reviewCollection = client.db('metro_bond').collection('reviews'); 
@@ -159,21 +159,7 @@ async function run() {
     })
 
 
-    //bioData related apis
-    // app.get('/bioData', async(req,res)=>{
-    //   const { minAge, maxAge, gender, division } = req.query;
-    //   // Build filter object
-    //   let filter = {};
-    //   if (minAge) filter.age = { $gte: parseInt(minAge) };
-    //   if (maxAge) filter.age = { ...filter.age, $lte: parseInt(maxAge) };
-    //   if (gender) filter.gender = gender;
-    //   if (division) filter.division = division;
-
-    //   const result = await bioCollection.find(filter).toArray();
-    //   res.send(result);
-    // })
-
-
+   //bioData related api's
     app.get('/bioData', async (req, res) => {
       console.log('Fetching bioData...');
     
@@ -211,11 +197,15 @@ async function run() {
     app.post('/bioData', async (req, res) => {
       try {
           const biodata = req.body;
-          // New Biodata ID generate 
-          const lastBiodata = await bioCollection.findOne().sort({ biodataId: -1 });
-          const newId = lastBiodata ? lastBiodata.biodataId + 1 : 1; 
-          biodata.biodataId = newId; 
+          
+          // Find last inserted biodata ID
+          const lastBiodata = await bioCollection.find().sort({ biodataId: -1 }).limit(1).toArray();
+          const newId = lastBiodata.length > 0 ? lastBiodata[0].biodataId + 1 : 1;
   
+          // Assign new ID
+          biodata.biodataId = newId;
+  
+          // Insert into database
           const result = await bioCollection.insertOne(biodata);
           res.send(result);
       } catch (error) {
@@ -223,8 +213,8 @@ async function run() {
           res.status(500).send({ message: 'Error creating biodata' });
       }
   });
-
   
+
 
   // Get last biodata ID
   app.get('/bioData/lastId', async (req, res) => {
@@ -250,6 +240,7 @@ async function run() {
     app.get('/favorite', verifyToken, async (req, res) => {
       const email = req.query.email;
       const query = {email: email};
+      console.log(query)
       const  result = await favoriteCollection.find(query).toArray();
       res.send(result);
     })
