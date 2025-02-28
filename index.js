@@ -36,7 +36,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const userCollection = client.db('metro_bond').collection('users'); 
     const reviewCollection = client.db('metro_bond').collection('reviews'); 
@@ -160,11 +160,45 @@ async function run() {
 
 
     //bioData related apis
-    app.get('/bioData', async(req,res)=>{
-      const result = await bioCollection.find().toArray();
-      res.send(result);
-    })
+    // app.get('/bioData', async(req,res)=>{
+    //   const { minAge, maxAge, gender, division } = req.query;
+    //   // Build filter object
+    //   let filter = {};
+    //   if (minAge) filter.age = { $gte: parseInt(minAge) };
+    //   if (maxAge) filter.age = { ...filter.age, $lte: parseInt(maxAge) };
+    //   if (gender) filter.gender = gender;
+    //   if (division) filter.division = division;
 
+    //   const result = await bioCollection.find(filter).toArray();
+    //   res.send(result);
+    // })
+
+
+    app.get('/bioData', async (req, res) => {
+      console.log('Fetching bioData...');
+    
+      const { minAge, maxAge, biodataType , permanentDivision } = req.query;
+    
+      // Filter Object
+      let query = {};
+      if (minAge && maxAge) {
+        query.age = { $gte: parseInt(minAge), $lte: parseInt(maxAge) };
+      }
+     
+      if (biodataType) query.biodataType = biodataType;
+      if (permanentDivision) query.permanentDivision = permanentDivision;
+      console.log("Query:", query);
+
+      const result = await bioCollection.find(query).toArray();
+      res.send(result);
+    });
+
+
+    // app.post('/bioData', async(req,res)=>{
+    //   const biodata = req.body;
+    //   const result = await bioCollection.insertOne(biodata);
+    //   res.send(result);
+    // })
 
     app.get('/bioData/:id', async(req,res)=>{
       const id = req.params.id;
@@ -174,7 +208,25 @@ async function run() {
     })
 
 
-    // Get last biodata ID
+    app.post('/bioData', async (req, res) => {
+      try {
+          const biodata = req.body;
+          // New Biodata ID generate 
+          const lastBiodata = await bioCollection.findOne().sort({ biodataId: -1 });
+          const newId = lastBiodata ? lastBiodata.biodataId + 1 : 1; 
+          biodata.biodataId = newId; 
+  
+          const result = await bioCollection.insertOne(biodata);
+          res.send(result);
+      } catch (error) {
+          console.error(error);
+          res.status(500).send({ message: 'Error creating biodata' });
+      }
+  });
+
+  
+
+  // Get last biodata ID
   app.get('/bioData/lastId', async (req, res) => {
     try {
         const lastBiodata = await bioCollection.find().sort({ biodataId: -1 }).limit(1).toArray();
@@ -186,31 +238,6 @@ async function run() {
     }
   });
 
-// Create or Update Biodata
-app.post('/bioData', async (req, res) => {
-  try {
-      const { _id, ...biodata } = req.body;
-
-      if (_id) {
-          // Update existing biodata
-          const query = { _id: new ObjectId(_id) };
-          const updateDoc = { $set: biodata };
-          const result = await bioCollection.updateOne(query, updateDoc);
-          res.send({ message: "Biodata updated successfully", modifiedCount: result.modifiedCount });
-      } else {
-          // Get last biodata ID and create new one
-          const lastBiodata = await bioCollection.find().sort({ biodataId: -1 }).limit(1).toArray();
-          const newId = lastBiodata.length > 0 ? lastBiodata[0].biodataId + 1 : 1;
-          const newBiodata = { ...biodata, biodataId: newId };
-          
-          const result = await bioCollection.insertOne(newBiodata);
-          res.send({ message: "Biodata created successfully", insertedId: result.insertedId });
-      }
-      } catch (error) {
-          console.error("Error in creating/updating biodata:", error);
-          res.status(500).send({ message: "Server error" });
-      }
-    });
 
 
     //favorite api's
@@ -269,20 +296,27 @@ app.post('/bioData', async (req, res) => {
       res.send(result);
   });
 
+    // app.post('/payments', async(req,res)=>{
+    //   const payment = req.body;
+    //   const paymentResult = await paymentCollection.insertOne(payment);
+
+    //   //delete each 
+    //   console.log('payment info', payment);
+    //   const query = {_id:{
+    //     $in: payment?._id?.map(id=>new ObjectId(id))
+    //   }};
+
+    //   const deleteResult = await bioCollection.deleteMany(query);
+    //   res.send({paymentResult, deleteResult});
+    // })
+   
     app.post('/payments', async(req,res)=>{
       const payment = req.body;
       const paymentResult = await paymentCollection.insertOne(payment);
+      res.send(paymentResult);
 
-      //delete each 
-      console.log('payment info', payment);
-      const query = {_id:{
-        $in: payment._id.map(id=>new ObjectId(id))
-      }};
-
-      const deleteResult = await bioCollection.deleteMany(query);
-      res.send({paymentResult, deleteResult});
     })
-   
+
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
     // console.log("Pinged your deployment. You successfully connected to MongoDB!");
