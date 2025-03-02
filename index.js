@@ -11,7 +11,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 //middleware
 app.use(cors({
-  origin: ['http://localhost:5000', 
+  origin: ['https://b10-a12-metro-server.vercel.app', 
     'https://b10a12-metro.web.app',
     'https://b10a12-metro.firebaseapp.com',
     'http://localhost:5173'
@@ -36,13 +36,15 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const userCollection = client.db('metro_bond').collection('users'); 
     const reviewCollection = client.db('metro_bond').collection('reviews'); 
     const bioCollection = client.db('metro_bond').collection('bioData'); 
     const favoriteCollection = client.db('metro_bond').collection('favorite'); 
     const paymentCollection = client.db('metro_bond').collection('payments'); 
+    const contactCollection = client.db('metro_bond').collection('contact'); 
+   
 
 
     //jwt related api's
@@ -128,6 +130,17 @@ async function run() {
       const result = await userCollection.updateOne(filter, updatedDoc)
       res.send(result);
     })
+    app.patch('/users/premium/:id', verifyToken, verifyAdmin, async(req,res)=>{
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          status: 'premium'
+        }
+      }
+      const result = await userCollection.updateOne(filter, updatedDoc)
+      res.send(result);
+    })
 
     app.delete('/users/:id',verifyToken, verifyAdmin, async(req,res) => {
       const id = req.params.id;
@@ -164,12 +177,13 @@ async function run() {
       console.log('Fetching bioData...');
     
       const email = req.query.email;
+      const { minAge, maxAge, biodataType , permanentDivision } = req.query;
+      
       let query ={};
 
       if(email){
         query.email = email
       }
-      const { minAge, maxAge, biodataType , permanentDivision } = req.query;
     
       // Filter Object
       // let query = {};
@@ -267,6 +281,7 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await favoriteCollection.deleteOne(query);
+      res.setHeader("Cache-Control", "no-cache"); 
       res.send(result);     
     });
 
@@ -304,6 +319,14 @@ async function run() {
       res.send(result);
   });
 
+
+    app.post('/payments', async(req,res)=>{
+      const payment = req.body;
+      const paymentResult = await paymentCollection.insertOne(payment);
+      res.send(paymentResult);
+
+    })
+
     // app.post('/payments', async(req,res)=>{
     //   const payment = req.body;
     //   const paymentResult = await paymentCollection.insertOne(payment);
@@ -318,12 +341,85 @@ async function run() {
     //   res.send({paymentResult, deleteResult});
     // })
    
-    app.post('/payments', async(req,res)=>{
-      const payment = req.body;
-      const paymentResult = await paymentCollection.insertOne(payment);
-      res.send(paymentResult);
+   
 
-    })
+//contact collection
+// API endpoint to create a new contact request
+app.post('/contactRequest', async (req, res) => {
+  try {
+    const { name, biodataId, status, mobileNumber, email } = req.body;
+
+    // Create a new contact request object
+    const newRequest = {
+      name,
+      biodataId,
+      status,
+      mobileNumber,
+      email,
+      createdAt: new Date()
+    };
+
+    // Insert into the contactRequestsCollection
+    const result = await contactCollection.insertOne(newRequest);
+    res.send({ message: 'Contact request created successfully', result });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: 'Error creating contact request' });
+  }
+});
+
+    // GET contact requests for the user
+app.get('/contactRequests', async (req, res) => {
+  try {
+    const email = req.query.email;  // Get the email from the query
+    const query = { email };  // Filter by email if passed
+
+    // Fetch all contact requests from the collection
+    const requests = await contactCollection.find(query).toArray();
+
+    res.send(requests);  // Send the result back to the client
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: 'Error fetching contact requests' });
+  }
+});
+
+
+    // premiumRequest Route: Accepts a request to mark a biodata as "premium"
+// app.post('/premiumRequest', verifyToken, async (req, res) => {
+//   const { userId, biodataId } = req.body;
+
+//   try {
+//     // Find the biodata based on the biodataId
+//     const biodata = await bioCollection.findOne({ _id: new ObjectId(biodataId) });
+//     if (!biodata) {
+//       return res.status(404).send({ message: 'Biodata not found' });
+//     }
+
+//     // Check if the user is the one who owns this biodata
+//     if (biodata.email !== req.decoded.email) {
+//       return res.status(403).send({ message: 'You cannot request this biodata' });
+//     }
+
+//     // Create a premium request record (to be approved by the admin)
+//     const premiumRequest = {
+//       userId: userId,
+//       biodataId: biodataId,
+//       status: 'pending', // Default status
+//       createdAt: new Date(),
+//     };
+
+//     // Insert the premium request into the database (new collection)
+//     const result = await client.db('metro_bond').collection('premiumRequests').insertOne(premiumRequest);
+//     res.send({ message: 'Premium request submitted successfully', result });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send({ message: 'Error submitting premium request' });
+//   }
+// });
+
+
+
 
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
