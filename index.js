@@ -11,7 +11,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 //middleware
 app.use(cors({
-  origin: ['https://b10-a12-metro-server.vercel.app', 
+  origin: ['http://localhost:5000', 
     'https://b10a12-metro.web.app',
     'https://b10a12-metro.firebaseapp.com',
     'http://localhost:5173'
@@ -323,6 +323,7 @@ async function run() {
     app.post('/payments', async(req,res)=>{
       const payment = req.body;
       const paymentResult = await paymentCollection.insertOne(payment);
+      console.log('payment info', payment);
       res.send(paymentResult);
 
     })
@@ -419,7 +420,55 @@ app.get('/contactRequests', async (req, res) => {
 // });
 
 
+//stats or analytics
+app.get('/admin-stats', verifyToken, verifyAdmin, async(req,res)=>{
+  const users = await userCollection.estimatedDocumentCount();
+  const biodatas = await bioCollection.estimatedDocumentCount();
+  const premiumPay = await paymentCollection.estimatedDocumentCount();
+  
+  const result = await paymentCollection.aggregate([
+    {
+      $group: {
+        _id: null,
+        totalRevenue: {
+          $sum: '$price'
+        }
+      }
+    }
+  ]).toArray();
+  const revenue = result.length > 0? result[0].totalRevenue : 0;
 
+    // Male & Female biodata count 
+  const genderStats = await bioCollection.aggregate([
+    {
+      $group: {
+        _id: { $toLower: "$biodataType" }, 
+        count: { $sum: 1 }
+      }
+    }
+  ]).toArray();
+
+  // Male & Female count 
+  let maleCount = 0;
+  let femaleCount = 0;
+  
+  genderStats.forEach(stat => {
+    if (stat._id === "male") {
+      maleCount = stat.count;
+    } else if (stat._id === "female") {
+      femaleCount = stat.count;
+    }
+  });
+
+  res.send({
+    users,
+    biodatas,
+    premiumPay,
+    revenue, 
+    maleCount, 
+    femaleCount
+  })
+})
 
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
