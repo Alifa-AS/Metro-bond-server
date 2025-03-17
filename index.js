@@ -11,7 +11,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 //middleware
 app.use(cors({
-  origin: ['http://localhost:5000', 
+  origin: ['https://b10-a12-metro-server.vercel.app', 
     'https://b10a12-metro.web.app',
     'https://b10a12-metro.firebaseapp.com',
     'http://localhost:5173'
@@ -43,7 +43,6 @@ async function run() {
     const bioCollection = client.db('metro_bond').collection('bioData'); 
     const favoriteCollection = client.db('metro_bond').collection('favorite'); 
     const paymentCollection = client.db('metro_bond').collection('payments'); 
-    const contactCollection = client.db('metro_bond').collection('contact'); 
    
 
 
@@ -207,6 +206,12 @@ async function run() {
       res.send(result);
     })
 
+    
+    app.get('/bioDataCount', async(req,res)=>{
+      const count = await bioCollection.estimatedDocumentCount();;
+      res.send({count});
+    })
+
 
     //create or update bioData
     app.post('/bioData', async (req, res) => {
@@ -244,8 +249,6 @@ async function run() {
       }
   });
   
-  
-
 
   // Get last biodata ID
   app.get('/bioData/lastId', async (req, res) => {
@@ -310,6 +313,19 @@ async function run() {
     }
     })
 
+    app.get('/payment/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };  
+      const result = await paymentCollection.findOne(query);
+      
+      if (!result) {
+          return res.status(404).send({ message: 'Payment not found' });
+      }
+  
+      res.send(result);
+  });
+
+  
     app.get('/payments/:email', verifyToken, async (req, res) => {
       const query = {email: req.params.email}
       if(req.params.email !== req.decoded.email){
@@ -328,62 +344,129 @@ async function run() {
 
     })
 
-    // app.post('/payments', async(req,res)=>{
-    //   const payment = req.body;
-    //   const paymentResult = await paymentCollection.insertOne(payment);
 
-    //   //delete each 
-    //   console.log('payment info', payment);
-    //   const query = {_id:{
-    //     $in: payment?._id?.map(id=>new ObjectId(id))
-    //   }};
+    //contact related api's
+    // app.post('/contact-request', async (req, res) => {
+    //   try {
+    //     const { biodataId, name, contactEmail, mobileNumber, transitionId } = req.body;
+    
+    //     const newRequest = {
+    //       biodataId,
+    //       name,
+    //       contactEmail,
+    //       mobileNumber,
+    //       transitionId,
+    //       status: "pending", 
+    //     };
+    
+    //     const result = await contactCollection.insertOne(newRequest);
+    //     res.status(201).json(result);
+    //   } catch (error) {
+    //     console.error(error);
+    //     res.status(500).json({ message: "Error creating contact request" });
+    //   }
+    // });
 
-    //   const deleteResult = await bioCollection.deleteMany(query);
-    //   res.send({paymentResult, deleteResult});
-    // })
-   
-   
 
-//contact collection
-// API endpoint to create a new contact request
-app.post('/contactRequest', async (req, res) => {
+
+app.get("/contact/:email", async (req, res) => {
+  const email = req.params.email;
+  console.log(email);
+
   try {
-    const { name, biodataId, status, mobileNumber, email } = req.body;
+    const result = await paymentCollection.find({ email: email }).toArray(); 
 
-    // Create a new contact request object
-    const newRequest = {
-      name,
-      biodataId,
-      status,
-      mobileNumber,
-      email,
-      createdAt: new Date()
-    };
+    if (result.length === 0) {
+      return res.status(404).json({ message: "No contact requests found!" });
+    }
 
-    // Insert into the contactRequestsCollection
-    const result = await contactCollection.insertOne(newRequest);
-    res.send({ message: 'Contact request created successfully', result });
+    console.log(result);
+    res.send(result);
   } catch (error) {
     console.error(error);
-    res.status(500).send({ message: 'Error creating contact request' });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-    // GET contact requests for the user
-app.get('/contactRequests', async (req, res) => {
+
+
+app.delete("/contact/:id", async (req, res) => {
   try {
-    const email = req.query.email;  // Get the email from the query
-    const query = { email };  // Filter by email if passed
+    const id = req.params.id;
+    const result = await paymentCollection.deleteOne({ _id: new ObjectId(id) });
 
-    // Fetch all contact requests from the collection
-    const requests = await contactCollection.find(query).toArray();
-
-    res.send(requests);  // Send the result back to the client
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "Contact request not found!" });
+    }
+    res.json({ message: "Contact request deleted successfully!" });
   } catch (error) {
-    console.error(error);
-    res.status(500).send({ message: 'Error fetching contact requests' });
+    console.error("Error deleting contact request:", error);
+    res.status(500).json({ message: "Server error", error });
   }
 });
+
+
+app.get('/admin/payments', async (req, res) => {
+  try {
+    const payments = await paymentCollection.find().toArray(); // Get all payments
+    res.status(200).json(payments); // Send all payment data to the admin
+  } catch (error) {
+    console.error("Error fetching payments:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.get('/payments/:email', verifyToken, async (req, res) => {
+  const query = { email: req.params.email };
+
+  // Verify token to make sure the user is accessing their own data
+  if (req.params.email !== req.decoded.email) {
+    return res.status(403).send({ message: 'Forbidden access' });
+  }
+
+  try {
+    const result = await paymentCollection.find(query).toArray(); // Get payments of specific user
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error fetching user payments:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.patch('/payment-data/:id', async (req, res) => {
+  const id = req.params.id;
+  const updateData = { status: req.body.status };
+
+  const result = await paymentCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: updateData }
+  );
+
+  if (result.modifiedCount === 0) {
+    return res.status(404).send({ message: "Payment data not found or no change made" });
+  }
+
+  res.send({ message: "Payment status updated successfully" });
+});
+
+
+app.delete("/payments/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    const result = await paymentCollection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "Payment not found!" });
+    }
+
+    res.status(200).json({ message: "Payment record deleted successfully!" });
+  } catch (error) {
+    console.error("Error deleting payment:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 
 
     // premiumRequest Route: Accepts a request to mark a biodata as "premium"
