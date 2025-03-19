@@ -1,4 +1,5 @@
 const express = require('express');
+const router = express.Router();
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const app = express();
@@ -43,6 +44,7 @@ async function run() {
     const bioCollection = client.db('metro_bond').collection('bioData'); 
     const favoriteCollection = client.db('metro_bond').collection('favorite'); 
     const paymentCollection = client.db('metro_bond').collection('payments'); 
+    const premiumCollection = client.db('metro_bond').collection('premium'); 
    
 
 
@@ -345,29 +347,6 @@ async function run() {
     })
 
 
-    //contact related api's
-    // app.post('/contact-request', async (req, res) => {
-    //   try {
-    //     const { biodataId, name, contactEmail, mobileNumber, transitionId } = req.body;
-    
-    //     const newRequest = {
-    //       biodataId,
-    //       name,
-    //       contactEmail,
-    //       mobileNumber,
-    //       transitionId,
-    //       status: "pending", 
-    //     };
-    
-    //     const result = await contactCollection.insertOne(newRequest);
-    //     res.status(201).json(result);
-    //   } catch (error) {
-    //     console.error(error);
-    //     res.status(500).json({ message: "Error creating contact request" });
-    //   }
-    // });
-
-
 
 app.get("/contact/:email", async (req, res) => {
   const email = req.params.email;
@@ -467,41 +446,39 @@ app.delete("/payments/:id", async (req, res) => {
 });
 
 
+//premium request
+app.post("/premiumRequest", async (req, res) => {
+  const { biodataId, email } = req.body;
+
+  try {
+    const existingRequest = await premiumCollection.findOne({ biodataId });
+
+    if (existingRequest) {
+      return res.status(400).json({ message: "Request already sent!" });
+    }
+
+    const result = await premiumCollection.insertOne({ biodataId, email, status: "pending" });
+
+    res.status(200).json({ message: "Request sent successfully", result });
+  } catch (error) {
+    console.error("Error processing premium request:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+})
 
 
-    // premiumRequest Route: Accepts a request to mark a biodata as "premium"
-// app.post('/premiumRequest', verifyToken, async (req, res) => {
-//   const { userId, biodataId } = req.body;
+app.get("/premiumRequest", async (req, res) => {
+  try {
+    const premiumRequests = await premiumCollection.find().toArray(); // Fetch all requests
+    res.status(200).json(premiumRequests);
+  } catch (error) {
+    console.error("Error fetching premium requests:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
-//   try {
-//     // Find the biodata based on the biodataId
-//     const biodata = await bioCollection.findOne({ _id: new ObjectId(biodataId) });
-//     if (!biodata) {
-//       return res.status(404).send({ message: 'Biodata not found' });
-//     }
 
-//     // Check if the user is the one who owns this biodata
-//     if (biodata.email !== req.decoded.email) {
-//       return res.status(403).send({ message: 'You cannot request this biodata' });
-//     }
-
-//     // Create a premium request record (to be approved by the admin)
-//     const premiumRequest = {
-//       userId: userId,
-//       biodataId: biodataId,
-//       status: 'pending', // Default status
-//       createdAt: new Date(),
-//     };
-
-//     // Insert the premium request into the database (new collection)
-//     const result = await client.db('metro_bond').collection('premiumRequests').insertOne(premiumRequest);
-//     res.send({ message: 'Premium request submitted successfully', result });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).send({ message: 'Error submitting premium request' });
-//   }
-// });
-
+    
 
 //stats or analytics
 app.get('/admin-stats', verifyToken, verifyAdmin, async(req,res)=>{
