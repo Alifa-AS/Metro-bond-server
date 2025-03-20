@@ -448,7 +448,7 @@ app.delete("/payments/:id", async (req, res) => {
 
 //premium request
 app.post("/premiumRequest", async (req, res) => {
-  const { biodataId, email } = req.body;
+  const { biodataId, name, email } = req.body;
 
   try {
     const existingRequest = await premiumCollection.findOne({ biodataId });
@@ -457,7 +457,7 @@ app.post("/premiumRequest", async (req, res) => {
       return res.status(400).json({ message: "Request already sent!" });
     }
 
-    const result = await premiumCollection.insertOne({ biodataId, email, status: "pending" });
+    const result = await premiumCollection.insertOne({ biodataId, name, email, status: "pending" });
 
     res.status(200).json({ message: "Request sent successfully", result });
   } catch (error) {
@@ -469,11 +469,108 @@ app.post("/premiumRequest", async (req, res) => {
 
 app.get("/premiumRequest", async (req, res) => {
   try {
-    const premiumRequests = await premiumCollection.find().toArray(); // Fetch all requests
+    const premiumRequests = await premiumCollection.find().toArray();
     res.status(200).json(premiumRequests);
   } catch (error) {
     console.error("Error fetching premium requests:", error);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+// app.patch("/premiumRequest/:id", async (req, res) => {
+//   const { id } = req.params;  
+//   const { status } = req.body;  
+  
+//   try {
+//     const filter = { _id: new ObjectId(id) }; 
+//     const updateDoc = { $set: { status } };
+
+//     const updateResult = await premiumCollection.updateOne(filter, updateDoc);
+
+//     if (updateResult.matchedCount === 0) {
+//       return res.status(404).json({ message: "Request not found!" });
+//     }
+
+//     res.status(200).json({ message: "Request updated successfully", updateResult });
+//   } catch (error) {
+//     console.error("Error updating premium request:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+
+
+
+// app.patch("/premiumRequest/:id", async (req, res) => {
+//   const { id } = req.params;  
+//   const { status } = req.body; 
+
+//   try {
+//     const filter = { _id: new ObjectId(id) }; 
+//     const updateDoc = { $set: { status: "premium" } }; 
+
+//     const updateResult = await premiumCollection.updateOne(filter, updateDoc);
+
+//     if (updateResult.matchedCount === 0) {
+//       return res.status(404).json({ message: "Request not found!" });
+//     }
+
+//     res.status(200).json({ message: "Request updated to premium", updateResult });
+//   } catch (error) {
+//     console.error("Error updating premium request:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+
+app.patch('/payment-data/:id', verifyToken, async (req, res) => {
+  const id = req.params.id;
+  const updateData = { status: req.body.status };
+
+  try {
+    // Update the status in the payment collection
+    const paymentResult = await paymentCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    if (paymentResult.modifiedCount === 0) {
+      return res.status(404).send({ message: "Payment data not found or no change made" });
+    }
+
+    // Update the isPremium status in the bioCollection 
+    const userEmail = req.body.email; 
+    const bioUpdateResult = await bioCollection.updateOne(
+      { email: userEmail },
+      { $set: { isPremium: true } }  
+    );
+
+    if (bioUpdateResult.modifiedCount === 0) {
+      return res.status(404).send({ message: "User not found in bioCollection or no change made" });
+    }
+
+    res.send({ message: "Payment and premium status updated successfully" });
+  } catch (error) {
+    console.error("Error updating payment and premium status:", error);
+    res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+
+
+app.delete("/premium/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await premiumCollection.deleteOne({ _id: new ObjectId(id) });  
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "User not found!" });  
+    }
+
+    res.status(200).json({ message: "User deleted successfully" });  
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).json({ message: "Server error" });  
   }
 });
 
