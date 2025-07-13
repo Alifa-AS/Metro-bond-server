@@ -12,7 +12,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 //middleware
 app.use(cors({
-  origin: ['https://b10-a12-metro-server.vercel.app', 
+  origin: ['http://localhost:5000', 
     'https://b10a12-metro.web.app',
     'https://b10a12-metro.firebaseapp.com',
     'http://localhost:5173'
@@ -37,7 +37,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
+    await client.connect();
 
     const userCollection = client.db('metro_bond').collection('users'); 
     const reviewCollection = client.db('metro_bond').collection('reviews'); 
@@ -58,7 +58,7 @@ async function run() {
 
     //middlewares
     const verifyToken = (req, res, next) =>{
-      console.log("inside verify token", req.headers.authorization);
+      // console.log("inside verify token", req.headers.authorization);
       if(!req.headers.authorization){
         return res.status(401).send({ message: 'Unauthorized access' })
       }
@@ -87,7 +87,7 @@ async function run() {
     //user related api
     app.get('/users', verifyToken, verifyAdmin, async(req,res)=>{
       const result = await userCollection.find().toArray();
-      console.log(result);
+      // console.log(result);
       res.send(result);
     })
 
@@ -108,7 +108,7 @@ async function run() {
 
     app.post('/users', async(req,res) => {
       const user = req.body;
-      console.log("Received User:", user); 
+      // console.log("Received User:", user); 
       const query = {email: user.email} 
       const existingUser = await userCollection.findOne(query);
       
@@ -116,7 +116,7 @@ async function run() {
         return res.send({ message: 'user already exists', insertedId: null});
       }
       const result = await userCollection.insertOne(user);
-      console.log("Inserted User:", result);
+      // console.log("Inserted User:", result);
       res.send(result);
     })
   
@@ -145,7 +145,7 @@ async function run() {
 
     app.delete('/users/:id',verifyToken, verifyAdmin, async(req,res) => {
       const id = req.params.id;
-      console.log("Deleting user with ID:", id);
+      // console.log("Deleting user with ID:", id);
       const query = {_id: new ObjectId(id)}
       const result = await userCollection.deleteOne(query);
       res.send(result);
@@ -175,7 +175,7 @@ async function run() {
 
    //bioData related api's
     app.get('/bioData', async (req, res) => {
-      console.log('Fetching bioData...');
+      // console.log('Fetching bioData...');
     
       const email = req.query.email;
       const { minAge, maxAge, biodataType , permanentDivision } = req.query;
@@ -194,7 +194,7 @@ async function run() {
      
       if (biodataType) query.biodataType = biodataType;
       if (permanentDivision) query.permanentDivision = permanentDivision;
-      console.log("Query:", query);
+      // console.log("Query:", query);
 
       const result = await bioCollection.find(query).toArray();
       res.send(result);
@@ -276,7 +276,7 @@ async function run() {
     app.get('/favorite', verifyToken, async (req, res) => {
       const email = req.query.email;
       const query = {email: email};
-      console.log(query)
+      // console.log(query)
       const  result = await favoriteCollection.find(query).toArray();
       res.send(result);
     })
@@ -328,29 +328,32 @@ async function run() {
   });
 
   
-    app.get('/payments/:email', verifyToken, async (req, res) => {
-      const query = {email: req.params.email}
-      if(req.params.email !== req.decoded.email){
-        return res.status(403).send({message: 'forbidden access'})
-      }
-      const result = await paymentCollection.find(query).toArray();
-      res.send(result);
-  });
+  //   app.get('/payments/:email', verifyToken, async (req, res) => {
+  //     const query = {email: req.params.email}
+  //     if(req.params.email !== req.decoded.email){
+  //       return res.status(403).send({message: 'forbidden access'})
+  //     }
+  //     const result = await paymentCollection.find(query).toArray();
+  //     res.send(result);
+  // });
 
 
     app.post('/payments', async(req,res)=>{
       const payment = req.body;
       const paymentResult = await paymentCollection.insertOne(payment);
-      console.log('payment info', payment);
+      // console.log('payment info', payment);
       res.send(paymentResult);
 
     })
+
+     //to see contact info
+
 
 
 
 app.get("/contact/:email", async (req, res) => {
   const email = req.params.email;
-  console.log(email);
+  // console.log(email);
 
   try {
     const result = await paymentCollection.find({ email: email }).toArray(); 
@@ -359,7 +362,7 @@ app.get("/contact/:email", async (req, res) => {
       return res.status(404).json({ message: "No contact requests found!" });
     }
 
-    console.log(result);
+    // console.log(result);
     res.send(result);
   } catch (error) {
     console.error(error);
@@ -446,6 +449,8 @@ app.delete("/payments/:id", async (req, res) => {
 });
 
 
+
+
 //premium request
 app.post("/premiumRequest", async (req, res) => {
   const { biodataId, name, email } = req.body;
@@ -477,50 +482,27 @@ app.get("/premiumRequest", async (req, res) => {
   }
 });
 
+app.patch('/premiumRequest/:id', async (req, res) => {
+  const id = req.params.id;
+  const updateData = { status: req.body.status };
 
-// app.patch("/premiumRequest/:id", async (req, res) => {
-//   const { id } = req.params;  
-//   const { status } = req.body;  
-  
-//   try {
-//     const filter = { _id: new ObjectId(id) }; 
-//     const updateDoc = { $set: { status } };
+  try {
+    const result = await premiumCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
 
-//     const updateResult = await premiumCollection.updateOne(filter, updateDoc);
+    if (result.modifiedCount === 0) {
+      return res.status(404).send({ message: "Premium request not found or no change made" });
+    }
 
-//     if (updateResult.matchedCount === 0) {
-//       return res.status(404).json({ message: "Request not found!" });
-//     }
+    res.send({ message: "Premium request status updated successfully" });
+  } catch (error) {
+    console.error("Error updating premium request:", error);
+    res.status(500).send({ message: "Internal server error" });
+  }
+});
 
-//     res.status(200).json({ message: "Request updated successfully", updateResult });
-//   } catch (error) {
-//     console.error("Error updating premium request:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
-
-
-
-// app.patch("/premiumRequest/:id", async (req, res) => {
-//   const { id } = req.params;  
-//   const { status } = req.body; 
-
-//   try {
-//     const filter = { _id: new ObjectId(id) }; 
-//     const updateDoc = { $set: { status: "premium" } }; 
-
-//     const updateResult = await premiumCollection.updateOne(filter, updateDoc);
-
-//     if (updateResult.matchedCount === 0) {
-//       return res.status(404).json({ message: "Request not found!" });
-//     }
-
-//     res.status(200).json({ message: "Request updated to premium", updateResult });
-//   } catch (error) {
-//     console.error("Error updating premium request:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
 
 app.patch('/payment-data/:id', verifyToken, async (req, res) => {
   const id = req.params.id;
