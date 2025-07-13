@@ -12,7 +12,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 //middleware
 app.use(cors({
-  origin: ['http://localhost:5000', 
+  origin: ['https://b10-a12-metro-server.vercel.app', 
     'https://b10a12-metro.web.app',
     'https://b10a12-metro.firebaseapp.com',
     'http://localhost:5173'
@@ -37,7 +37,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const userCollection = client.db('metro_bond').collection('users'); 
     const reviewCollection = client.db('metro_bond').collection('reviews'); 
@@ -201,12 +201,39 @@ async function run() {
     });
 
 
-    app.get('/bioData/:id', async(req,res)=>{
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id)}
-      const result = await bioCollection.findOne(query);
-      res.send(result);
-    })
+    // app.get('/bioData/:id', async(req,res)=>{
+    //   const id = req.params.id;
+    //   const query = { _id: new ObjectId(id)}
+    //   const result = await bioCollection.findOne(query);
+    //   res.send(result);
+    // })
+
+    app.get('/bioData/:id', verifyToken, async(req,res)=>{
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id)}
+  const result = await bioCollection.findOne(query);
+
+  if(!result){
+    return res.status(404).send({ message: 'Biodata not found' });
+  }
+
+  // Check if logged-in user is premium
+  const userEmail = req.decoded.email;
+  const user = await userCollection.findOne({ email: userEmail });
+
+  if(!user){
+    return res.status(404).send({ message: 'User not found' });
+  }
+
+  // If user is not premium, remove contact info
+  if(user.status !== 'premium'){
+    delete result.contactEmail;
+    delete result.mobileNumber;
+  }
+
+  res.send(result);
+})
+
 
     
     app.get('/bioDataCount', async(req,res)=>{
