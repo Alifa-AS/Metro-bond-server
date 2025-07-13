@@ -178,7 +178,7 @@ async function run() {
       // console.log('Fetching bioData...');
     
       const email = req.query.email;
-      const { minAge, maxAge, biodataType , permanentDivision } = req.query;
+      const { minAge, maxAge, gender , permanentDivision } = req.query;
       
       let query ={};
 
@@ -192,7 +192,7 @@ async function run() {
         query.age = { $gte: parseInt(minAge), $lte: parseInt(maxAge) };
       }
      
-      if (biodataType) query.biodataType = biodataType;
+      if (gender) query.gender = gender;
       if (permanentDivision) query.permanentDivision = permanentDivision;
       // console.log("Query:", query);
 
@@ -608,7 +608,7 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async(req,res)=>{
   const genderStats = await bioCollection.aggregate([
     {
       $group: {
-        _id: { $toLower: "$biodataType" }, 
+        _id: { $toLower: "$gender" }, 
         count: { $sum: 1 }
       }
     }
