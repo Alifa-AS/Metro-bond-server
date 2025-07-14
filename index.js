@@ -12,7 +12,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 //middleware
 app.use(cors({
-  origin: ['https://b10-a12-metro-server.vercel.app', 
+  origin: ['http://localhost:5000', 
     'https://b10a12-metro.web.app',
     'https://b10a12-metro.firebaseapp.com',
     'http://localhost:5173'
@@ -37,7 +37,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
+    await client.connect();
 
     const userCollection = client.db('metro_bond').collection('users'); 
     const reviewCollection = client.db('metro_bond').collection('reviews'); 
@@ -45,7 +45,6 @@ async function run() {
     const favoriteCollection = client.db('metro_bond').collection('favorite'); 
     const paymentCollection = client.db('metro_bond').collection('payments'); 
     const premiumCollection = client.db('metro_bond').collection('premium'); 
-   
 
 
     //jwt related api's
@@ -208,31 +207,44 @@ async function run() {
     //   res.send(result);
     // })
 
-    app.get('/bioData/:id', verifyToken, async(req,res)=>{
+
+ app.get('/bioData/:id', verifyToken, async (req, res) => {
   const id = req.params.id;
-  const query = { _id: new ObjectId(id)}
+  const query = { _id: new ObjectId(id) };
   const result = await bioCollection.findOne(query);
 
-  if(!result){
+  if (!result) {
     return res.status(404).send({ message: 'Biodata not found' });
   }
 
-  // Check if logged-in user is premium
   const userEmail = req.decoded.email;
   const user = await userCollection.findOne({ email: userEmail });
 
-  if(!user){
+  if (!user) {
     return res.status(404).send({ message: 'User not found' });
   }
 
-  // If user is not premium, remove contact info
-  if(user.status !== 'premium'){
-    delete result.contactEmail;
-    delete result.mobileNumber;
+  //  Check paymentCollection if user paid for this biodata
+  const payment = await paymentCollection.findOne({
+    email: userEmail,
+    bioDataId: parseInt(result.biodataId),
+    status: 'Approved'
+  });
+
+  // console.log('Payment info', payment);
+
+  //  If user is premium OR payment found, show contact info
+  if (user.status === 'premium' || payment) {
+    result.paymentInfo = payment; // attach payment data if you want to use in frontend
+    return res.send(result);
   }
 
+  //  Otherwise, remove contact info
+  delete result.contactEmail;
+  delete result.mobileNumber;
+
   res.send(result);
-})
+});
 
 
     
@@ -378,19 +390,50 @@ async function run() {
 
 
 
+// app.get("/contact/:email", async (req, res) => {
+//   const email = req.params.email;
+//   // console.log(email);
+
+//   try {
+//     const result = await paymentCollection.find({ email: email }).toArray(); 
+
+//     if (result.length === 0) {
+//       return res.status(404).json({ message: "No contact requests found!" });
+//     }
+
+//     // console.log(result);
+//     res.send(result);
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+
 app.get("/contact/:email", async (req, res) => {
   const email = req.params.email;
-  // console.log(email);
 
   try {
-    const result = await paymentCollection.find({ email: email }).toArray(); 
+    // Find payment documents for this email
+    const payments = await paymentCollection.find({ email: email }).toArray();
 
-    if (result.length === 0) {
+    if (payments.length === 0) {
       return res.status(404).json({ message: "No contact requests found!" });
     }
 
-    // console.log(result);
-    res.send(result);
+    // For each payment, get related biodata for mobile number
+    const detailedPayments = await Promise.all(
+      payments.map(async (payment) => {
+        const biodata = await bioCollection.findOne({ biodataId: payment.bioDataId });
+
+        return {
+          ...payment,
+          mobileNumber: biodata ? biodata.mobileNumber : null,  // add mobile number from biodata
+          name: biodata ? biodata.name : payment.name // fallback to payment name if needed
+        };
+      })
+    );
+
+    res.send(detailedPayments);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
@@ -598,40 +641,6 @@ app.patch('/premiumRequest/:id', async (req, res) => {
     res.send({ message: "Premium request status updated successfully" });
   } catch (error) {
     console.error("Error updating premium request:", error);
-    res.status(500).send({ message: "Internal server error" });
-  }
-});
-
-
-app.patch('/payment-data/:id', verifyToken, async (req, res) => {
-  const id = req.params.id;
-  const updateData = { status: req.body.status };
-
-  try {
-    // Update the status in the payment collection
-    const paymentResult = await paymentCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: updateData }
-    );
-
-    if (paymentResult.modifiedCount === 0) {
-      return res.status(404).send({ message: "Payment data not found or no change made" });
-    }
-
-    // Update the isPremium status in the bioCollection 
-    const userEmail = req.body.email; 
-    const bioUpdateResult = await bioCollection.updateOne(
-      { email: userEmail },
-      { $set: { isPremium: true } }  
-    );
-
-    if (bioUpdateResult.modifiedCount === 0) {
-      return res.status(404).send({ message: "User not found in bioCollection or no change made" });
-    }
-
-    res.send({ message: "Payment and premium status updated successfully" });
-  } catch (error) {
-    console.error("Error updating payment and premium status:", error);
     res.status(500).send({ message: "Internal server error" });
   }
 });
