@@ -475,6 +475,44 @@ app.delete("/payments/:id", async (req, res) => {
   }
 });
 
+// PATCH route to approve premium request and update biodata status
+app.patch("/premiumRequest/:id", async (req, res) => {
+  const id = req.params.id;
+  const { status } = req.body;
+
+  try {
+    // Find the premium request by id
+    const request = await premiumCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!request) {
+      return res.status(404).send({ message: "Premium request not found" });
+    }
+
+    // Update premiumCollection status
+    const premiumResult = await premiumCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status } }
+    );
+
+    // Update bioCollection status to premium using biodataId
+    const bioResult = await bioCollection.updateOne(
+      { biodataId: parseInt(request.biodataId) },
+      { $set: { status: "premium" } }
+    );
+
+    res.send({
+      message: "Premium status updated in both collections",
+      premiumResult,
+      bioResult,
+    });
+
+  } catch (error) {
+    console.error("Error updating premium status:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 
 
 
@@ -509,11 +547,34 @@ app.get("/premiumRequest", async (req, res) => {
   }
 });
 
+// app.patch('/premiumRequest/:id', async (req, res) => {
+//   const id = req.params.id;
+//   const updateData = { status: req.body.status };
+
+//   try {
+//     const result = await premiumCollection.updateOne(
+//       { _id: new ObjectId(id) },
+//       { $set: updateData }
+//     );
+
+//     if (result.modifiedCount === 0) {
+//       return res.status(404).send({ message: "Premium request not found or no change made" });
+//     }
+
+//     res.send({ message: "Premium request status updated successfully" });
+//   } catch (error) {
+//     console.error("Error updating premium request:", error);
+//     res.status(500).send({ message: "Internal server error" });
+//   }
+// });
+
+
 app.patch('/premiumRequest/:id', async (req, res) => {
   const id = req.params.id;
   const updateData = { status: req.body.status };
 
   try {
+    // Update premiumCollection
     const result = await premiumCollection.updateOne(
       { _id: new ObjectId(id) },
       { $set: updateData }
@@ -521,6 +582,17 @@ app.patch('/premiumRequest/:id', async (req, res) => {
 
     if (result.modifiedCount === 0) {
       return res.status(404).send({ message: "Premium request not found or no change made" });
+    }
+
+    // Find user email from premiumCollection
+    const user = await premiumCollection.findOne({ _id: new ObjectId(id) });
+
+    if (user && user.email) {
+      // Update bioCollection to set isPremium: true
+      const bioResult = await bioCollection.updateOne(
+        { email: user.email },
+        { $set: { isPremium: true } }
+      );
     }
 
     res.send({ message: "Premium request status updated successfully" });
