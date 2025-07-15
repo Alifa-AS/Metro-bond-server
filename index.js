@@ -590,27 +590,6 @@ app.get("/premiumRequest", async (req, res) => {
   }
 });
 
-// app.patch('/premiumRequest/:id', async (req, res) => {
-//   const id = req.params.id;
-//   const updateData = { status: req.body.status };
-
-//   try {
-//     const result = await premiumCollection.updateOne(
-//       { _id: new ObjectId(id) },
-//       { $set: updateData }
-//     );
-
-//     if (result.modifiedCount === 0) {
-//       return res.status(404).send({ message: "Premium request not found or no change made" });
-//     }
-
-//     res.send({ message: "Premium request status updated successfully" });
-//   } catch (error) {
-//     console.error("Error updating premium request:", error);
-//     res.status(500).send({ message: "Internal server error" });
-//   }
-// });
-
 
 app.patch('/premiumRequest/:id', async (req, res) => {
   const id = req.params.id;
